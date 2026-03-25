@@ -9,8 +9,8 @@ const PORT = process.env.PORT || 5000;
 app.use(cors());
 app.use(express.json());
 
-// API Routes - Removed the '/api' prefix here because Vercel/api/index takes care of it
-app.use('/', contactRoutes);
+// API Routes - Restored /api prefix for production compatibility
+app.use('/api', contactRoutes);
 
 app.get('/health', (req, res) => {
   res.json({ status: 'OK' });
