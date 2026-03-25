@@ -28,13 +28,9 @@ export const submitContact = async (req: Request, res: Response) => {
       [name, phone, email, company, city, inquiry_type, message]
     );
 
-    res.status(201).json({ 
-      message: 'Contact form submitted successfully', 
-      contactId: (result as any).insertId 
-    });
-
-    // Send Email Notification asynchronously
+    // Send Email Notification
     try {
+      console.log('Attempting to send notification email to:', process.env.NOTIFICATION_EMAIL || 'patelkrushi242@gmail.com');
       const mailOptions = {
         from: `"DRD Plantech Leads" <${process.env.SMTP_USER}>`,
         to: process.env.NOTIFICATION_EMAIL || 'patelkrushi242@gmail.com',
@@ -59,10 +55,16 @@ export const submitContact = async (req: Request, res: Response) => {
       };
 
       await transporter.sendMail(mailOptions);
-      console.log('✅ Notification email sent to:', process.env.NOTIFICATION_EMAIL);
+      console.log('✅ Notification email sent successfully');
     } catch (mailError) {
       console.error('❌ Failed to send notification email:', mailError);
     }
+
+    // Finally send the response after email attempt
+    res.status(201).json({ 
+      message: 'Contact form submitted successfully', 
+      contactId: (result as any).insertId 
+    });
   } catch (error) {
     console.error('Error submitting contact form:', error);
     res.status(500).json({ error: 'Internal server error' });
