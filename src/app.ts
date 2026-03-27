@@ -4,6 +4,7 @@ import 'dotenv/config';
 import contactRoutes from './routes/contactRoutes.js';
 import adminRoutes from './routes/adminRoutes.js';
 import galleryRoutes from './routes/galleryRoutes.js';
+import videoRoutes from './routes/videoRoutes.js';
 
 const app = express();
 
@@ -15,6 +16,7 @@ app.use(express.urlencoded({ extended: true, limit: '15mb' }));
 app.use('/api', contactRoutes);
 app.use('/api', adminRoutes);
 app.use('/api', galleryRoutes);
+app.use('/api', videoRoutes);
 
 app.get('/', (req, res) => {
   res.json({ message: 'DND Backend is running' });
