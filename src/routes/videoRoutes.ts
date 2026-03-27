@@ -1,8 +1,10 @@
 import { Router } from 'express';
-import { getVideos } from '../controllers/videoController.js';
+import { createVideo, deleteVideo, getVideos } from '../controllers/videoController.js';
 
 const router = Router();
 
 router.get('/videos', getVideos);
+router.post('/videos', createVideo);
+router.delete('/videos', deleteVideo);
 
 export default router;
