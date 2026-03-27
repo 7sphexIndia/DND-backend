@@ -14,10 +14,13 @@ interface ProductJoinRow extends RowDataPacket {
 }
 
 interface ProductVariantInput {
-  id?: number;
+  id?: number | string;
   title?: string;
+  name?: string;
   image?: string;
+  image_url?: string;
   description?: string | null;
+  details?: string | null;
 }
 
 const buildProductFromRows = (rows: ProductJoinRow[], fallback?: { id: number; name: string }) : ProductWithVariants => ({
@@ -52,6 +55,42 @@ const getProductById = async (productId: number) => {
   );
 
   return rows;
+};
+
+const getTrimmedString = (...values: Array<unknown>) => {
+  for (const value of values) {
+    if (typeof value === 'string') {
+      const trimmed = value.trim();
+
+      if (trimmed) {
+        return trimmed;
+      }
+    }
+  }
+
+  return '';
+};
+
+const getOptionalText = (...values: Array<unknown>) => {
+  for (const value of values) {
+    if (typeof value === 'string') {
+      return value;
+    }
+  }
+
+  return null;
+};
+
+const normalizeVariantInput = (variant: ProductVariantInput) => {
+  const rawId = variant?.id;
+  const numericId = typeof rawId === 'string' ? Number(rawId) : rawId;
+
+  return {
+    id: Number.isInteger(numericId) && Number(numericId) > 0 ? Number(numericId) : null,
+    title: getTrimmedString(variant?.title, variant?.name),
+    image: getTrimmedString(variant?.image, variant?.image_url),
+    description: getOptionalText(variant?.description, variant?.details),
+  };
 };
 
 export const getProducts = async (req: Request, res: Response) => {
@@ -100,12 +139,15 @@ export const getProducts = async (req: Request, res: Response) => {
 };
 
 export const createProduct = async (req: Request, res: Response) => {
-  const { name, variants } = req.body as {
+  const { name, product_name, title, variants } = req.body as {
     name?: string;
+    product_name?: string;
+    title?: string;
     variants?: ProductVariantInput[];
   };
+  const productName = getTrimmedString(name, product_name, title);
 
-  if (!name?.trim()) {
+  if (!productName) {
     return res.status(400).json({ error: 'Product name is required' });
   }
 
@@ -113,11 +155,7 @@ export const createProduct = async (req: Request, res: Response) => {
     return res.status(400).json({ error: 'At least one variant is required' });
   }
 
-  const normalizedVariants = variants.map((variant) => ({
-    title: typeof variant?.title === 'string' ? variant.title.trim() : '',
-    image: typeof variant?.image === 'string' ? variant.image.trim() : '',
-    description: typeof variant?.description === 'string' ? variant.description : null,
-  }));
+  const normalizedVariants = variants.map(normalizeVariantInput);
 
   const hasInvalidVariant = normalizedVariants.some((variant) => !variant.title || !variant.image);
 
@@ -132,7 +170,7 @@ export const createProduct = async (req: Request, res: Response) => {
 
     const [productResult] = await connection.execute<ResultSetHeader>(
       'INSERT INTO products (name) VALUES (?)',
-      [name.trim()]
+      [productName]
     );
 
     const productId = productResult.insertId;
@@ -147,7 +185,7 @@ export const createProduct = async (req: Request, res: Response) => {
     await connection.commit();
 
     const rows = await getProductById(productId);
-    const product = buildProductFromRows(rows, { id: productId, name: name.trim() });
+    const product = buildProductFromRows(rows, { id: productId, name: productName });
 
     return res.status(201).json({
       message: 'Product created successfully',
@@ -164,16 +202,19 @@ export const createProduct = async (req: Request, res: Response) => {
 
 export const updateProduct = async (req: Request, res: Response) => {
   const id = Number(req.params.id);
-  const { name, variants } = req.body as {
+  const { name, product_name, title, variants } = req.body as {
     name?: string;
+    product_name?: string;
+    title?: string;
     variants?: ProductVariantInput[];
   };
+  const productName = getTrimmedString(name, product_name, title);
 
   if (!Number.isInteger(id) || id <= 0) {
     return res.status(400).json({ error: 'A valid product id is required' });
   }
 
-  if (!name?.trim()) {
+  if (!productName) {
     return res.status(400).json({ error: 'Product name is required' });
   }
 
@@ -181,17 +222,20 @@ export const updateProduct = async (req: Request, res: Response) => {
     return res.status(400).json({ error: 'At least one variant is required' });
   }
 
-  const normalizedVariants = variants.map((variant) => ({
-    id: Number.isInteger(variant?.id) && Number(variant.id) > 0 ? Number(variant.id) : null,
-    title: typeof variant?.title === 'string' ? variant.title.trim() : '',
-    image: typeof variant?.image === 'string' ? variant.image.trim() : '',
-    description: typeof variant?.description === 'string' ? variant.description : null,
-  }));
+  const normalizedVariants = variants.map(normalizeVariantInput);
 
   const hasInvalidVariant = normalizedVariants.some((variant) => !variant.title || !variant.image);
 
   if (hasInvalidVariant) {
     return res.status(400).json({ error: 'Each variant must include title and image' });
+  }
+
+  const duplicateVariantIds = normalizedVariants
+    .filter((variant) => variant.id !== null)
+    .map((variant) => variant.id as number);
+
+  if (new Set(duplicateVariantIds).size !== duplicateVariantIds.length) {
+    return res.status(400).json({ error: 'Duplicate variant ids are not allowed' });
   }
 
   const connection = await pool.getConnection();
@@ -230,7 +274,7 @@ export const updateProduct = async (req: Request, res: Response) => {
 
     await connection.execute<ResultSetHeader>(
       'UPDATE products SET name = ? WHERE id = ?',
-      [name.trim(), id]
+      [productName, id]
     );
 
     for (const variant of normalizedVariants) {
@@ -259,7 +303,7 @@ export const updateProduct = async (req: Request, res: Response) => {
     await connection.commit();
 
     const rows = await getProductById(id);
-    const product = buildProductFromRows(rows, { id, name: name.trim() });
+    const product = buildProductFromRows(rows, { id, name: productName });
 
     return res.status(200).json({
       message: 'Product updated successfully',
