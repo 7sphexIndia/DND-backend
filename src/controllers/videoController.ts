@@ -28,7 +28,10 @@ export const getVideos = async (req: Request, res: Response) => {
     return res.status(200).json(rows);
   } catch (error) {
     console.error('Error fetching videos:', error);
-    return res.status(500).json({ error: 'Internal server error' });
+    return res.status(500).json({ 
+      error: 'Internal server error', 
+      details: error instanceof Error ? error.message : String(error) 
+    });
   }
 };
 
@@ -70,7 +73,10 @@ export const createVideo = async (req: Request, res: Response) => {
     });
   } catch (error) {
     console.error('Error creating video:', error);
-    return res.status(500).json({ error: 'Internal server error' });
+    return res.status(500).json({ 
+      error: 'Internal server error', 
+      details: error instanceof Error ? error.message : String(error) 
+    });
   }
 };
 
@@ -94,6 +100,9 @@ export const deleteVideo = async (req: Request, res: Response) => {
     return res.status(200).json({ message: 'Video deleted successfully' });
   } catch (error) {
     console.error('Error deleting video:', error);
-    return res.status(500).json({ error: 'Internal server error' });
+    return res.status(500).json({ 
+      error: 'Internal server error', 
+      details: error instanceof Error ? error.message : String(error) 
+    });
   }
 };

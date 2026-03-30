@@ -24,7 +24,6 @@ CREATE TABLE IF NOT EXISTS gallery (
   title VARCHAR(255) NOT NULL,
   image LONGTEXT NOT NULL,
   description TEXT,
-  status TINYINT(1) DEFAULT 1,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 

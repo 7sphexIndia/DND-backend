@@ -107,6 +107,9 @@ export const deleteGalleryItem = async (req: Request, res: Response) => {
     return res.status(200).json({ message: 'Gallery item deleted successfully' });
   } catch (error) {
     console.error('Error deleting gallery item:', error);
-    return res.status(500).json({ error: 'Internal server error' });
+    return res.status(500).json({ 
+      error: 'Internal server error', 
+      details: error instanceof Error ? error.message : String(error) 
+    });
   }
 };

@@ -227,7 +227,10 @@ export const getProducts = async (req: Request, res: Response) => {
     return res.status(200).json(finalProducts);
   } catch (error) {
     console.error('Error fetching products:', error);
-    return res.status(500).json({ error: 'Internal server error' });
+    return res.status(500).json({ 
+      error: 'Internal server error', 
+      details: error instanceof Error ? error.message : String(error) 
+    });
   }
 };
 
@@ -297,9 +300,12 @@ export const createProduct = async (req: Request, res: Response) => {
       product,
     });
   } catch (error) {
-    await connection.rollback();
+    if (connection) await connection.rollback();
     console.error('Error creating product:', error);
-    return res.status(500).json({ error: 'Internal server error' });
+    return res.status(500).json({ 
+      error: 'Internal server error', 
+      details: error instanceof Error ? error.message : String(error) 
+    });
   } finally {
     connection.release();
   }
@@ -427,9 +433,12 @@ export const updateProduct = async (req: Request, res: Response) => {
       product,
     });
   } catch (error) {
-    await connection.rollback();
+    if (connection) await connection.rollback();
     console.error('Error updating product:', error);
-    return res.status(500).json({ error: 'Internal server error' });
+    return res.status(500).json({ 
+      error: 'Internal server error', 
+      details: error instanceof Error ? error.message : String(error) 
+    });
   } finally {
     connection.release();
   }
@@ -459,6 +468,9 @@ export const deleteProduct = async (req: Request, res: Response) => {
     return res.status(200).json({ message: 'Product hidden successfully' });
   } catch (error) {
     console.error('Error deleting product:', error);
-    return res.status(500).json({ error: 'Internal server error' });
+    return res.status(500).json({ 
+      error: 'Internal server error', 
+      details: error instanceof Error ? error.message : String(error) 
+    });
   }
 };
