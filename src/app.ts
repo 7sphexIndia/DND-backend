@@ -67,7 +67,30 @@ const noCache = (req: express.Request, res: express.Response, next: express.Next
   next();
 };
 
-app.use('/api', noCache);
+const shortCache = (req: express.Request, res: express.Response, next: express.NextFunction) => {
+  res.setHeader('Cache-Control', 'public, max-age=60, stale-while-revalidate=30');
+  next();
+};
+
+app.use('/api/contacts', noCache);
+app.use('/api/admin', noCache);
+app.use('/api/categories', (req, res, next) => {
+  if (req.method === 'GET') return shortCache(req, res, next);
+  noCache(req, res, next);
+});
+app.use('/api/products', (req, res, next) => {
+  if (req.method === 'GET') return shortCache(req, res, next);
+  noCache(req, res, next);
+});
+app.use('/api/gallery', (req, res, next) => {
+  if (req.method === 'GET') return shortCache(req, res, next);
+  noCache(req, res, next);
+});
+app.use('/api/videos', (req, res, next) => {
+  if (req.method === 'GET') return shortCache(req, res, next);
+  noCache(req, res, next);
+});
+app.use('/api/proxy', shortCache);
 
 // API Routes
 app.use('/api', contactRoutes);

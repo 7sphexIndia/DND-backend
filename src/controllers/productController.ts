@@ -528,7 +528,15 @@ export const updateCategory = async (req: Request, res: Response) => {
         display_order = COALESCE(?, display_order), 
         is_active = COALESCE(?, is_active) 
        WHERE id = ?`,
-      [name || null, slug || null, description || null, image || null, getOptionalNumber(display_order), getActiveFlag(is_active), id]
+      [
+        name || null, 
+        slug || null, 
+        description || null, 
+        image || null, 
+        getOptionalNumber(display_order), 
+        is_active !== undefined ? getActiveFlag(is_active) : null, 
+        id
+      ]
     );
 
     if (result.affectedRows === 0) return res.status(404).json({ error: 'Category not found' });
