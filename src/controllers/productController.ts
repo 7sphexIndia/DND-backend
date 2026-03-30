@@ -494,6 +494,52 @@ export const getCategoryBySlugOrId = async (req: Request, res: Response) => {
   }
 };
 
+export const createCategory = async (req: Request, res: Response) => {
+  try {
+    const { name, slug, description, image, display_order, is_active } = req.body;
+    const catName = getTrimmedString(name);
+    const catSlug = getTrimmedString(slug) || catName.toLowerCase().replace(/\s+/g, '-');
+    
+    if (!catName) return res.status(400).json({ error: 'Name is required' });
+
+    const [result] = await pool.execute<ResultSetHeader>(
+      'INSERT INTO product_categories (name, slug, description, image, display_order, is_active) VALUES (?, ?, ?, ?, ?, ?)',
+      [catName, catSlug, description || null, image || null, getOptionalNumber(display_order), getActiveFlag(is_active)]
+    );
+
+    return res.status(201).json({ id: result.insertId, name: catName, slug: catSlug });
+  } catch (error) {
+    console.error('Error creating category:', error);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+};
+
+export const updateCategory = async (req: Request, res: Response) => {
+  try {
+    const id = Number(req.params.id);
+    const { name, slug, description, image, display_order, is_active } = req.body;
+    
+    const [result] = await pool.execute<ResultSetHeader>(
+      `UPDATE product_categories SET 
+        name = COALESCE(?, name), 
+        slug = COALESCE(?, slug), 
+        description = COALESCE(?, description), 
+        image = COALESCE(?, image), 
+        display_order = COALESCE(?, display_order), 
+        is_active = COALESCE(?, is_active) 
+       WHERE id = ?`,
+      [name || null, slug || null, description || null, image || null, getOptionalNumber(display_order), getActiveFlag(is_active), id]
+    );
+
+    if (result.affectedRows === 0) return res.status(404).json({ error: 'Category not found' });
+
+    return res.status(200).json({ message: 'Category updated successfully' });
+  } catch (error) {
+    console.error('Error updating category:', error);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+};
+
 export const updateProductStatus = async (req: Request, res: Response) => {
   const rawId = req.query.id ?? req.body?.id ?? req.params?.id;
   const id = Number(rawId);
