@@ -13,7 +13,18 @@ export interface ProductVariant extends RowDataPacket {
 export interface Product extends RowDataPacket {
   id: number;
   name: string;
+  category_id: number;
   created_at: Date;
+  display_order: number | null;
+  is_active: number;
+}
+
+export interface Category extends RowDataPacket {
+  id: number;
+  name: string;
+  slug: string;
+  description: string;
+  image: string | null;
   display_order: number | null;
   is_active: number;
 }
@@ -21,6 +32,7 @@ export interface Product extends RowDataPacket {
 export interface ProductWithVariants {
   id: number;
   name: string;
+  category_id: number;
   created_at: Date;
   display_order: number | null;
   is_active: number;

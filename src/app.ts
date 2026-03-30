@@ -14,6 +14,7 @@ const MAX_GALLERY_UPLOAD_BYTES = 15 * 1024 * 1024;
 const MAX_PRODUCTS_UPLOAD_BYTES = 15 * 1024 * 1024;
 
 app.use(cors());
+app.set('etag', false);
 
 app.use('/api/videos', (req, res, next) => {
   const contentLengthHeader = req.headers['content-length'];
@@ -58,33 +59,15 @@ app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 
 const noCache = (req: express.Request, res: express.Response, next: express.NextFunction) => {
-  if (req.method === 'GET') {
-    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
-    res.setHeader('Pragma', 'no-cache');
-    res.setHeader('Expires', '0');
-  }
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
+  res.setHeader('Surrogate-Control', 'no-store');
+  res.setHeader('Vercel-CDN-Cache-Control', 'no-store');
   next();
 };
 
-app.use('/api/gallery', noCache);
-app.use('/api/videos', noCache);
-app.use('/api/products', noCache);
-
-app.use('/api/videos', (req, res, next) => {
-  if (req.method === 'GET') {
-    res.setHeader('Cache-Control', 'public, s-maxage=300, stale-while-revalidate=600');
-  }
-
-  next();
-});
-
-app.use('/api/products', (req, res, next) => {
-  if (req.method === 'GET') {
-    res.setHeader('Cache-Control', 'public, s-maxage=300, stale-while-revalidate=600');
-  }
-
-  next();
-});
+app.use('/api', noCache);
 
 // API Routes
 app.use('/api', contactRoutes);

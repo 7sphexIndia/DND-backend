@@ -6,6 +6,7 @@ import type { ProductVariant, ProductWithVariants } from '../models/productModel
 interface ProductJoinRow extends RowDataPacket {
   product_id: number;
   product_name: string;
+  product_category_id: number;
   product_created_at: Date;
   product_display_order: number | null;
   product_is_active: number;
@@ -32,11 +33,13 @@ interface ProductVariantInput {
 const buildProductFromRows = (rows: ProductJoinRow[], fallback?: {
   id: number;
   name: string;
+  category_id?: number;
   display_order?: number | null;
   is_active?: number;
 }) : ProductWithVariants => ({
   id: rows[0]?.product_id ?? fallback?.id ?? 0,
   name: rows[0]?.product_name ?? fallback?.name ?? '',
+  category_id: rows[0]?.product_category_id ?? fallback?.category_id ?? 1,
   created_at: rows[0]?.product_created_at ?? new Date(),
   display_order: rows[0]?.product_display_order ?? fallback?.display_order ?? null,
   is_active: rows[0]?.product_is_active ?? fallback?.is_active ?? 1,
@@ -57,6 +60,7 @@ const getProductById = async (productId: number, includeInactive = true) => {
     `SELECT
        p.id AS product_id,
        p.name AS product_name,
+       p.category_id AS product_category_id,
        p.created_at AS product_created_at,
        p.display_order AS product_display_order,
        p.is_active AS product_is_active,
@@ -162,11 +166,13 @@ const normalizeVariantInput = (variant: ProductVariantInput) => {
 export const getProducts = async (req: Request, res: Response) => {
   try {
     const includeInactive = String(req.query.include_inactive ?? '').toLowerCase() === 'true';
+    const categoryId = getOptionalNumber(req.query.category_id);
 
     const [rows] = await pool.query<ProductJoinRow[]>(
       `SELECT
          p.id AS product_id,
          p.name AS product_name,
+         p.category_id AS product_category_id,
          p.created_at AS product_created_at,
          p.display_order AS product_display_order,
          p.is_active AS product_is_active,
@@ -180,13 +186,16 @@ export const getProducts = async (req: Request, res: Response) => {
        LEFT JOIN product_variants pv
          ON pv.product_id = p.id
         ${includeInactive ? '' : 'AND pv.is_active = 1'}
-       ${includeInactive ? '' : 'WHERE p.is_active = 1'}
+       WHERE (1=1)
+       ${includeInactive ? '' : 'AND p.is_active = 1'}
+       ${categoryId ? 'AND p.category_id = ?' : ''}
        ORDER BY
          COALESCE(p.display_order, 2147483647) ASC,
          p.created_at DESC,
          p.id DESC,
          COALESCE(pv.display_order, 2147483647) ASC,
-         pv.id ASC`
+         pv.id ASC`,
+      categoryId ? [categoryId] : []
     );
 
     const productsMap = new Map<number, ProductWithVariants>();
@@ -196,6 +205,7 @@ export const getProducts = async (req: Request, res: Response) => {
         productsMap.set(row.product_id, {
           id: row.product_id,
           name: row.product_name,
+          category_id: row.product_category_id,
           created_at: row.product_created_at,
           display_order: row.product_display_order,
           is_active: row.product_is_active,
@@ -227,15 +237,17 @@ export const getProducts = async (req: Request, res: Response) => {
 };
 
 export const createProduct = async (req: Request, res: Response) => {
-  const { name, product_name, title, display_order, is_active, variants } = req.body as {
+  const { name, product_name, title, category_id, display_order, is_active, variants } = req.body as {
     name?: string;
     product_name?: string;
     title?: string;
+    category_id?: number | string;
     display_order?: number | string | null;
     is_active?: number | string | boolean | null;
     variants?: ProductVariantInput[];
   };
   const productName = getTrimmedString(name, product_name, title);
+  const productCategoryId = getOptionalNumber(category_id) || 1;
   const productDisplayOrder = getOptionalNumber(display_order);
   const productIsActive = getActiveFlag(is_active);
 
@@ -261,8 +273,8 @@ export const createProduct = async (req: Request, res: Response) => {
     await connection.beginTransaction();
 
     const [productResult] = await connection.execute<ResultSetHeader>(
-      'INSERT INTO products (name, display_order, is_active) VALUES (?, ?, ?)',
-      [productName, productDisplayOrder, productIsActive]
+      'INSERT INTO products (name, category_id, display_order, is_active) VALUES (?, ?, ?, ?)',
+      [productName, productCategoryId, productDisplayOrder, productIsActive]
     );
 
     const productId = productResult.insertId;
@@ -280,6 +292,7 @@ export const createProduct = async (req: Request, res: Response) => {
     const product = buildProductFromRows(rows, {
       id: productId,
       name: productName,
+      category_id: productCategoryId,
       display_order: productDisplayOrder,
       is_active: productIsActive,
     });
@@ -303,15 +316,17 @@ export const createProduct = async (req: Request, res: Response) => {
 
 export const updateProduct = async (req: Request, res: Response) => {
   const id = Number(req.params.id);
-  const { name, product_name, title, display_order, is_active, variants } = req.body as {
+  const { name, product_name, title, category_id, display_order, is_active, variants } = req.body as {
     name?: string;
     product_name?: string;
     title?: string;
+    category_id?: number | string;
     display_order?: number | string | null;
     is_active?: number | string | boolean | null;
     variants?: ProductVariantInput[];
   };
   const productName = getTrimmedString(name, product_name, title);
+  const productCategoryId = getOptionalNumber(category_id);
   const productDisplayOrder = getOptionalNumber(display_order);
   const productIsActive = getActiveFlag(is_active);
 
@@ -378,8 +393,8 @@ export const updateProduct = async (req: Request, res: Response) => {
     }
 
     await connection.execute<ResultSetHeader>(
-      'UPDATE products SET name = ?, display_order = ?, is_active = ? WHERE id = ?',
-      [productName, productDisplayOrder, productIsActive, id]
+      'UPDATE products SET name = ?, category_id = COALESCE(?, category_id), display_order = ?, is_active = ? WHERE id = ?',
+      [productName, productCategoryId || null, productDisplayOrder, productIsActive, id]
     );
 
     for (const variant of normalizedVariants) {
@@ -411,6 +426,7 @@ export const updateProduct = async (req: Request, res: Response) => {
     const product = buildProductFromRows(rows, {
       id,
       name: productName,
+      category_id: productCategoryId || rows[0]?.product_category_id || 1,
       display_order: productDisplayOrder,
       is_active: productIsActive,
     });
@@ -432,7 +448,53 @@ export const updateProduct = async (req: Request, res: Response) => {
   }
 };
 
-export const deleteProduct = async (req: Request, res: Response) => {
+export const getCategories = async (req: Request, res: Response) => {
+  try {
+    const includeInactive = String(req.query.include_inactive ?? '').toLowerCase() === 'true';
+
+    const [rows] = await pool.query<RowDataPacket[]>(
+      `SELECT id, name, slug, description, image, display_order, is_active, created_at, updated_at 
+       FROM product_categories 
+       ${includeInactive ? '' : 'WHERE is_active = 1'}
+       ORDER BY COALESCE(display_order, 2147483647) ASC, id ASC`
+    );
+
+    return res.status(200).json(rows);
+  } catch (error) {
+    console.error('Error fetching categories:', error);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+};
+
+export const getCategoryBySlugOrId = async (req: Request, res: Response) => {
+  try {
+    const slug = String(req.params.slug || '').trim();
+    if (!slug) {
+      return res.status(400).json({ error: 'Category slug or id is required' });
+    }
+    let query = 'SELECT id, name, slug, description, image, display_order, is_active FROM product_categories WHERE is_active = 1 AND ';
+    const isId = /^\d+$/.test(slug);
+    
+    if (isId) {
+      query += 'id = ?';
+    } else {
+      query += 'slug = ?';
+    }
+
+    const [rows] = await pool.query<RowDataPacket[]>(query, [slug]);
+
+    if (rows.length === 0) {
+      return res.status(404).json({ error: 'Category not found' });
+    }
+
+    return res.status(200).json(rows[0]);
+  } catch (error) {
+    console.error('Error fetching category:', error);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+};
+
+export const updateProductStatus = async (req: Request, res: Response) => {
   const rawId = req.query.id ?? req.body?.id ?? req.params?.id;
   const id = Number(rawId);
 
