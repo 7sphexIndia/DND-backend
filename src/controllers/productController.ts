@@ -2,6 +2,7 @@ import type { Request, Response } from 'express';
 import type { ResultSetHeader, RowDataPacket } from 'mysql2';
 import pool from '../config/db.js';
 import type { ProductVariant, ProductWithVariants } from '../models/productModel.js';
+import { apiCache } from '../utils/cache.js';
 
 interface ProductJoinRow extends RowDataPacket {
   product_id: number;
@@ -162,6 +163,13 @@ const normalizeVariantInput = (variant: ProductVariantInput) => {
 export const getProducts = async (req: Request, res: Response) => {
   try {
     const includeInactive = String(req.query.include_inactive ?? '').toLowerCase() === 'true';
+    const cacheKey = `products_${includeInactive}`;
+
+    const cachedData = apiCache.get<ProductWithVariants[]>(cacheKey);
+    if (cachedData) {
+      return res.status(200).json(cachedData);
+    }
+
     const [rows] = await pool.query<ProductJoinRow[]>(
       `SELECT
          p.id AS product_id,
@@ -214,7 +222,9 @@ export const getProducts = async (req: Request, res: Response) => {
       }
     }
 
-    return res.status(200).json(Array.from(productsMap.values()));
+    const finalProducts = Array.from(productsMap.values());
+    apiCache.set(cacheKey, finalProducts);
+    return res.status(200).json(finalProducts);
   } catch (error) {
     console.error('Error fetching products:', error);
     return res.status(500).json({ error: 'Internal server error' });
@@ -278,6 +288,9 @@ export const createProduct = async (req: Request, res: Response) => {
       display_order: productDisplayOrder,
       is_active: productIsActive,
     });
+
+    apiCache.delete('products_false');
+    apiCache.delete('products_true');
 
     return res.status(201).json({
       message: 'Product created successfully',
@@ -406,6 +419,9 @@ export const updateProduct = async (req: Request, res: Response) => {
       is_active: productIsActive,
     });
 
+    apiCache.delete('products_false');
+    apiCache.delete('products_true');
+
     return res.status(200).json({
       message: 'Product updated successfully',
       product,
@@ -436,6 +452,9 @@ export const deleteProduct = async (req: Request, res: Response) => {
     if (!result.affectedRows) {
       return res.status(404).json({ error: 'Product not found' });
     }
+
+    apiCache.delete('products_false');
+    apiCache.delete('products_true');
 
     return res.status(200).json({ message: 'Product hidden successfully' });
   } catch (error) {

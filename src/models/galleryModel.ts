@@ -5,6 +5,5 @@ export interface GalleryItem extends RowDataPacket {
   title: string;
   image: string;
   description: string | null;
-  status: number;
   created_at: Date;
 }

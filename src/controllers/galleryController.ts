@@ -2,6 +2,8 @@ import type { Request, Response } from 'express';
 import pool from '../config/db.js';
 import type { GalleryItem } from '../models/galleryModel.js';
 
+import { apiCache } from '../utils/cache.js';
+
 const isValidHttpUrl = (value: string) => {
   try {
     const parsedUrl = new URL(value);
@@ -13,19 +15,28 @@ const isValidHttpUrl = (value: string) => {
 
 export const getGalleryItems = async (req: Request, res: Response) => {
   try {
+    const cachedData = apiCache.get<GalleryItem[]>('gallery');
+    if (cachedData) {
+      return res.status(200).json(cachedData);
+    }
+
     const [rows] = await pool.query<GalleryItem[]>(
-      'SELECT id, title, image, description, status, created_at FROM gallery WHERE status = 1 ORDER BY created_at DESC'
+      'SELECT id, title, image, description, created_at FROM gallery ORDER BY created_at DESC'
     );
 
+    apiCache.set('gallery', rows);
     return res.status(200).json(rows);
   } catch (error) {
     console.error('Error fetching gallery items:', error);
-    return res.status(500).json({ error: 'Internal server error' });
+    return res.status(500).json({ 
+      error: 'Internal server error', 
+      details: error instanceof Error ? error.message : String(error) 
+    });
   }
 };
 
 export const createGalleryItem = async (req: Request, res: Response) => {
-  const { title, image, description, category, status } = req.body;
+  const { title, image, description, category } = req.body;
   const normalizedDescription = description ?? category ?? null;
   const normalizedImage = typeof image === 'string' ? image.trim() : '';
 
@@ -42,18 +53,18 @@ export const createGalleryItem = async (req: Request, res: Response) => {
   }
 
   try {
-    const normalizedStatus = status === 0 ? 0 : 1;
     const [result] = await pool.execute(
-      'INSERT INTO gallery (title, image, description, status) VALUES (?, ?, ?, ?)',
-      [title, normalizedImage, normalizedDescription, normalizedStatus]
+      'INSERT INTO gallery (title, image, description) VALUES (?, ?, ?)',
+      [title, normalizedImage, normalizedDescription]
     );
 
     const galleryId = (result as { insertId: number }).insertId;
     const [rows] = await pool.query<GalleryItem[]>(
-      'SELECT id, title, image, description, status, created_at FROM gallery WHERE id = ? LIMIT 1',
+      'SELECT id, title, image, description, created_at FROM gallery WHERE id = ? LIMIT 1',
       [galleryId]
     );
 
+    apiCache.delete('gallery');
     return res.status(201).json({
       message: 'Gallery item created successfully',
       item: rows[0] ?? {
@@ -61,12 +72,14 @@ export const createGalleryItem = async (req: Request, res: Response) => {
         title,
         image: normalizedImage,
         description: normalizedDescription,
-        status: normalizedStatus,
       },
     });
   } catch (error) {
     console.error('Error creating gallery item:', error);
-    return res.status(500).json({ error: 'Internal server error' });
+    return res.status(500).json({ 
+      error: 'Internal server error', 
+      details: error instanceof Error ? error.message : String(error) 
+    });
   }
 };
 
@@ -80,7 +93,7 @@ export const deleteGalleryItem = async (req: Request, res: Response) => {
 
   try {
     const [result] = await pool.execute(
-      'UPDATE gallery SET status = 0 WHERE id = ? AND status = 1',
+      'DELETE FROM gallery WHERE id = ?',
       [id]
     );
 
@@ -90,6 +103,7 @@ export const deleteGalleryItem = async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Gallery item not found' });
     }
 
+    apiCache.delete('gallery');
     return res.status(200).json({ message: 'Gallery item deleted successfully' });
   } catch (error) {
     console.error('Error deleting gallery item:', error);
