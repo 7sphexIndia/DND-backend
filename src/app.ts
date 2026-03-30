@@ -57,13 +57,18 @@ app.use('/api/videos', express.urlencoded({ extended: true, limit: '4mb' }));
 app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 
-app.use('/api/gallery', (req, res, next) => {
+const noCache = (req: express.Request, res: express.Response, next: express.NextFunction) => {
   if (req.method === 'GET') {
-    res.setHeader('Cache-Control', 'public, s-maxage=300, stale-while-revalidate=600');
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
   }
-
   next();
-});
+};
+
+app.use('/api/gallery', noCache);
+app.use('/api/videos', noCache);
+app.use('/api/products', noCache);
 
 app.use('/api/videos', (req, res, next) => {
   if (req.method === 'GET') {

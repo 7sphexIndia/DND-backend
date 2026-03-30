@@ -24,15 +24,34 @@ export const proxyGoogleDriveImage = async (req: Request, res: Response) => {
 
     const contentType = response.headers.get('content-type');
     
-    // Check if it's an HTML page (likely a virus scan or error)
+    // Check if it's an HTML page (possibly virus scan prompt)
     if (contentType?.includes('text/html')) {
-        // If it's HTML, we might need a confirm token, but for now just log it
-        console.warn('Google Drive returned HTML instead of image. Checking for confirm token...');
-        // We could try to extract a confirmation token here if needed
+      const html = await response.text();
+      // Look for confirmation token in common Google Drive response formats
+      const confirmMatch = html.match(/confirm=([a-zA-Z0-9_-]+)/);
+      if (confirmMatch) {
+        const confirmUrl = `${driveUrl}&confirm=${confirmMatch[1]}`;
+        const secondResponse = await fetch(confirmUrl, {
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+          }
+        });
+        
+        if (secondResponse.ok && secondResponse.body) {
+           const finalContentType = secondResponse.headers.get('content-type') || 'image/jpeg';
+           res.setHeader('Content-Type', finalContentType);
+           res.setHeader('Cache-Control', 'public, max-age=604800');
+           const readable = Readable.fromWeb(secondResponse.body as any);
+           return readable.pipe(res);
+        }
+      }
+      return res.status(403).json({ error: 'Google Drive requires manual confirmation which could not be automated.' });
     }
 
     if (contentType) {
       res.setHeader('Content-Type', contentType);
+    } else {
+      res.setHeader('Content-Type', 'image/jpeg');
     }
     
     // Add cache headers
