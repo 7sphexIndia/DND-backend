@@ -2,7 +2,6 @@ import type { Request, Response } from 'express';
 import pool from '../config/db.js';
 import type { GalleryItem } from '../models/galleryModel.js';
 
-import { apiCache } from '../utils/cache.js';
 
 const isValidHttpUrl = (value: string) => {
   try {
@@ -15,16 +14,10 @@ const isValidHttpUrl = (value: string) => {
 
 export const getGalleryItems = async (req: Request, res: Response) => {
   try {
-    const cachedData = apiCache.get<GalleryItem[]>('gallery');
-    if (cachedData) {
-      return res.status(200).json(cachedData);
-    }
-
     const [rows] = await pool.query<GalleryItem[]>(
       'SELECT id, title, image, description, created_at FROM gallery ORDER BY created_at DESC'
     );
 
-    apiCache.set('gallery', rows);
     return res.status(200).json(rows);
   } catch (error) {
     console.error('Error fetching gallery items:', error);
@@ -64,7 +57,6 @@ export const createGalleryItem = async (req: Request, res: Response) => {
       [galleryId]
     );
 
-    apiCache.delete('gallery');
     return res.status(201).json({
       message: 'Gallery item created successfully',
       item: rows[0] ?? {
@@ -103,7 +95,6 @@ export const deleteGalleryItem = async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Gallery item not found' });
     }
 
-    apiCache.delete('gallery');
     return res.status(200).json({ message: 'Gallery item deleted successfully' });
   } catch (error) {
     console.error('Error deleting gallery item:', error);

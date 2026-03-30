@@ -2,7 +2,6 @@ import type { Request, Response } from 'express';
 import pool from '../config/db.js';
 import type { VideoItem } from '../models/videoModel.js';
 
-import { apiCache } from '../utils/cache.js';
 
 const isValidHttpUrl = (value: string) => {
   try {
@@ -15,16 +14,10 @@ const isValidHttpUrl = (value: string) => {
 
 export const getVideos = async (req: Request, res: Response) => {
   try {
-    const cachedData = apiCache.get<VideoItem[]>('videos');
-    if (cachedData) {
-      return res.status(200).json(cachedData);
-    }
-
     const [rows] = await pool.query<VideoItem[]>(
       'SELECT id, video_url, created_at FROM videos ORDER BY created_at DESC'
     );
 
-    apiCache.set('videos', rows);
     return res.status(200).json(rows);
   } catch (error) {
     console.error('Error fetching videos:', error);
@@ -63,7 +56,6 @@ export const createVideo = async (req: Request, res: Response) => {
       [videoId]
     );
 
-    apiCache.delete('videos');
     return res.status(201).json({
       message: 'Video created successfully',
       item: rows[0] ?? {
@@ -96,7 +88,6 @@ export const deleteVideo = async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Video not found' });
     }
 
-    apiCache.delete('videos');
     return res.status(200).json({ message: 'Video deleted successfully' });
   } catch (error) {
     console.error('Error deleting video:', error);
