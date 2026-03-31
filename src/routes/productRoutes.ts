@@ -9,8 +9,8 @@ router.post('/products', upload.any(), createProduct);
 router.put('/products/:id', upload.any(), updateProduct);
 router.delete('/products', deleteProduct);
 router.get('/categories', getCategories);
-router.post('/categories', createCategory);
-router.put('/categories/:id', updateCategory);
+router.post('/categories', upload.any(), createCategory);
+router.put('/categories/:id', upload.any(), updateCategory);
 router.get('/categories/:slug', getCategoryBySlugOrId);
 
 export default router;

@@ -582,13 +582,37 @@ export const createCategory = async (req: Request, res: Response) => {
   try {
     const { name, slug, description, image, display_order, is_active } = req.body;
     const catName = getTrimmedString(name);
+    let finalImage = image;
+
+    if (req.files && Array.isArray(req.files)) {
+      const file = (req.files as Express.Multer.File[]).find(f => f.fieldname === 'image');
+      if (file) {
+        try {
+          const result = await new Promise<UploadApiResponse>((resolve, reject) => {
+            const uploadStream = cloudinary.uploader.upload_stream(
+              { folder: 'categories' },
+              (error: any, result: any) => {
+                if (error) reject(error);
+                else resolve(result!);
+              }
+            );
+            uploadStream.end(file.buffer);
+          });
+          finalImage = result.secure_url;
+        } catch (uploadError) {
+          console.error('Error uploading category image:', uploadError);
+          return res.status(500).json({ error: 'Failed to upload category image to Cloudinary' });
+        }
+      }
+    }
+
     const catSlug = getTrimmedString(slug) || catName.toLowerCase().replace(/\s+/g, '-');
     
     if (!catName) return res.status(400).json({ error: 'Name is required' });
 
     const [result] = await pool.execute<ResultSetHeader>(
       'INSERT INTO product_categories (name, slug, description, image, display_order, is_active) VALUES (?, ?, ?, ?, ?, ?)',
-      [catName, catSlug, description || null, image || null, getOptionalNumber(display_order), getActiveFlag(is_active)]
+      [catName, catSlug, description || null, finalImage || null, getOptionalNumber(display_order), getActiveFlag(is_active)]
     );
 
     return res.status(201).json({ id: result.insertId, name: catName, slug: catSlug });
@@ -603,6 +627,30 @@ export const updateCategory = async (req: Request, res: Response) => {
     const id = Number(req.params.id);
     const { name, slug, description, image, display_order, is_active } = req.body;
     
+    let finalImage = image;
+
+    if (req.files && Array.isArray(req.files)) {
+      const file = (req.files as Express.Multer.File[]).find(f => f.fieldname === 'image');
+      if (file) {
+        try {
+          const result = await new Promise<UploadApiResponse>((resolve, reject) => {
+            const uploadStream = cloudinary.uploader.upload_stream(
+              { folder: 'categories' },
+              (error: any, result: any) => {
+                if (error) reject(error);
+                else resolve(result!);
+              }
+            );
+            uploadStream.end(file.buffer);
+          });
+          finalImage = result.secure_url;
+        } catch (uploadError) {
+          console.error('Error uploading category image:', uploadError);
+          return res.status(500).json({ error: 'Failed to upload category image to Cloudinary' });
+        }
+      }
+    }
+    
     const [result] = await pool.execute<ResultSetHeader>(
       `UPDATE product_categories SET 
         name = COALESCE(?, name), 
@@ -616,7 +664,7 @@ export const updateCategory = async (req: Request, res: Response) => {
         name || null, 
         slug || null, 
         description || null, 
-        image || null, 
+        finalImage || null, 
         getOptionalNumber(display_order), 
         is_active !== undefined ? getActiveFlag(is_active) : null, 
         id
