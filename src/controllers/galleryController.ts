@@ -43,7 +43,7 @@ export const createGalleryItem = async (req: Request, res: Response) => {
               folder: 'gallery',
               resource_type: 'auto',
             },
-            (error, result) => {
+            (error: any, result: any) => {
               if (error) reject(error);
               else resolve(result);
             }

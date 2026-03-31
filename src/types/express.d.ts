@@ -3,6 +3,7 @@ import { Request } from 'express';
 declare global {
   namespace Express {
     interface Request {
+      admin?: any; // Add this for auth check
       file?: Multer.File;
       files?: Multer.File[] | { [fieldname: string]: Multer.File[] };
     }
