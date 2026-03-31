@@ -1,7 +1,7 @@
 import type { Request, Response } from 'express';
 import pool from '../config/db.js';
 import type { GalleryItem } from '../models/galleryModel.js';
-
+import cloudinary from '../config/cloudinary.js';
 
 const isValidHttpUrl = (value: string) => {
   try {
@@ -29,23 +29,49 @@ export const getGalleryItems = async (req: Request, res: Response) => {
 };
 
 export const createGalleryItem = async (req: Request, res: Response) => {
-  const { title, image, description, category } = req.body;
-  const normalizedDescription = description ?? category ?? null;
-  const normalizedImage = typeof image === 'string' ? image.trim() : '';
-
-  if (!title || !normalizedImage) {
-    return res.status(400).json({ error: 'Title and image are required' });
-  }
-
-  if (normalizedImage.startsWith('data:')) {
-    return res.status(400).json({ error: 'Use an image URL instead of uploading base64 data' });
-  }
-
-  if (!isValidHttpUrl(normalizedImage)) {
-    return res.status(400).json({ error: 'Image must be a valid http or https URL' });
-  }
-
   try {
+    const { title, description, category, image: bodyImage, image_url } = req.body;
+    const normalizedDescription = description ?? category ?? null;
+    let finalImageUrl = bodyImage || image_url || '';
+
+    // Handle File Upload to Cloudinary
+    if (req.file) {
+      try {
+        const result = await new Promise((resolve, reject) => {
+          const uploadStream = cloudinary.uploader.upload_stream(
+            {
+              folder: 'gallery',
+              resource_type: 'auto',
+            },
+            (error, result) => {
+              if (error) reject(error);
+              else resolve(result);
+            }
+          );
+          uploadStream.end(req.file!.buffer);
+        });
+        
+        finalImageUrl = (result as any).secure_url;
+      } catch (uploadError) {
+        console.error('Cloudinary Upload Error:', uploadError);
+        return res.status(500).json({ error: 'Failed to upload image to Cloudinary' });
+      }
+    }
+
+    const normalizedImage = typeof finalImageUrl === 'string' ? finalImageUrl.trim() : '';
+
+    if (!title || !normalizedImage) {
+      return res.status(400).json({ error: 'Title and image (or file) are required' });
+    }
+
+    if (normalizedImage.startsWith('data:')) {
+      return res.status(400).json({ error: 'Use an image URL or upload a file instead of base64 data' });
+    }
+
+    if (!isValidHttpUrl(normalizedImage)) {
+      return res.status(400).json({ error: 'Image must be a valid http or https URL' });
+    }
+
     const [result] = await pool.execute(
       'INSERT INTO gallery (title, image, description) VALUES (?, ?, ?)',
       [title, normalizedImage, normalizedDescription]

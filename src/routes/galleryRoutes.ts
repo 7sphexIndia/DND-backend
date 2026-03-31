@@ -4,11 +4,12 @@ import {
   deleteGalleryItem,
   getGalleryItems,
 } from '../controllers/galleryController.js';
+import { upload } from '../middleware/upload.js';
 
 const router = Router();
 
 router.get('/gallery', getGalleryItems);
-router.post('/gallery', createGalleryItem);
+router.post('/gallery', upload.single('image'), createGalleryItem);
 router.delete('/gallery', deleteGalleryItem);
 
 export default router;

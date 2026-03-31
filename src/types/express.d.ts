@@ -1,11 +1,24 @@
-import type { SafeAdmin } from '../models/adminModel.js';
+import { Request } from 'express';
 
 declare global {
   namespace Express {
     interface Request {
-      admin?: SafeAdmin;
+      file?: Multer.File;
+      files?: Multer.File[] | { [fieldname: string]: Multer.File[] };
+    }
+
+    namespace Multer {
+      interface File {
+        fieldname: string;
+        originalname: string;
+        encoding: string;
+        mimetype: string;
+        size: number;
+        destination: string;
+        filename: string;
+        path: string;
+        buffer: Buffer;
+      }
     }
   }
 }
-
-export {};
