@@ -2,6 +2,8 @@ import type { Request, Response } from 'express';
 import type { ResultSetHeader, RowDataPacket } from 'mysql2';
 import pool from '../config/db.js';
 import type { ProductVariant, ProductWithVariants } from '../models/productModel.js';
+import cloudinary from '../config/cloudinary.js';
+import type { UploadApiResponse } from 'cloudinary';
 
 interface ProductJoinRow extends RowDataPacket {
   product_id: number;
@@ -237,7 +239,7 @@ export const getProducts = async (req: Request, res: Response) => {
 };
 
 export const createProduct = async (req: Request, res: Response) => {
-  const { name, product_name, title, category_id, display_order, is_active, variants } = req.body as {
+  const { name, product_name, title, category_id, display_order, is_active, variants, variants_json } = req.body as {
     name?: string;
     product_name?: string;
     title?: string;
@@ -245,7 +247,18 @@ export const createProduct = async (req: Request, res: Response) => {
     display_order?: number | string | null;
     is_active?: number | string | boolean | null;
     variants?: ProductVariantInput[];
+    variants_json?: string;
   };
+
+  let finalVariants: ProductVariantInput[] = variants || [];
+  if (variants_json) {
+    try {
+      finalVariants = JSON.parse(variants_json);
+    } catch (e) {
+      console.error('Error parsing variants_json:', e);
+    }
+  }
+
   const productName = getTrimmedString(name, product_name, title);
   const productCategoryId = getOptionalNumber(category_id) || 1;
   const productDisplayOrder = getOptionalNumber(display_order);
@@ -255,11 +268,38 @@ export const createProduct = async (req: Request, res: Response) => {
     return res.status(400).json({ error: 'Product name is required' });
   }
 
-  if (!Array.isArray(variants) || variants.length === 0) {
+  if (!Array.isArray(finalVariants) || finalVariants.length === 0) {
     return res.status(400).json({ error: 'At least one variant is required' });
   }
 
-  const normalizedVariants = variants.map(normalizeVariantInput);
+  // Handle Cloudinary uploads for variants with files
+  if (req.files && Array.isArray(req.files)) {
+    for (let i = 0; i < finalVariants.length; i++) {
+      const fieldName = `variant_image_${i}`;
+      const file = (req.files as Express.Multer.File[]).find(f => f.fieldname === fieldName);
+      
+      if (file) {
+        try {
+          const result = await new Promise<UploadApiResponse>((resolve, reject) => {
+            const uploadStream = cloudinary.uploader.upload_stream(
+              { folder: 'products' },
+              (error, result) => {
+                if (error) reject(error);
+                else resolve(result!);
+              }
+            );
+            uploadStream.end(file.buffer);
+          });
+          finalVariants[i].image = result.secure_url;
+        } catch (uploadError) {
+          console.error(`Error uploading variant image ${i}:`, uploadError);
+          return res.status(500).json({ error: 'Failed to upload variant image to Cloudinary' });
+        }
+      }
+    }
+  }
+
+  const normalizedVariants = finalVariants.map(normalizeVariantInput);
 
   const hasInvalidVariant = normalizedVariants.some((variant) => !variant.title || !variant.image);
 
@@ -316,7 +356,7 @@ export const createProduct = async (req: Request, res: Response) => {
 
 export const updateProduct = async (req: Request, res: Response) => {
   const id = Number(req.params.id);
-  const { name, product_name, title, category_id, display_order, is_active, variants } = req.body as {
+  const { name, product_name, title, category_id, display_order, is_active, variants, variants_json } = req.body as {
     name?: string;
     product_name?: string;
     title?: string;
@@ -324,7 +364,18 @@ export const updateProduct = async (req: Request, res: Response) => {
     display_order?: number | string | null;
     is_active?: number | string | boolean | null;
     variants?: ProductVariantInput[];
+    variants_json?: string;
   };
+
+  let finalVariants: ProductVariantInput[] = variants || [];
+  if (variants_json) {
+    try {
+      finalVariants = JSON.parse(variants_json);
+    } catch (e) {
+      console.error('Error parsing variants_json:', e);
+    }
+  }
+
   const productName = getTrimmedString(name, product_name, title);
   const productCategoryId = getOptionalNumber(category_id);
   const productDisplayOrder = getOptionalNumber(display_order);
@@ -338,11 +389,38 @@ export const updateProduct = async (req: Request, res: Response) => {
     return res.status(400).json({ error: 'Product name is required' });
   }
 
-  if (!Array.isArray(variants) || variants.length === 0) {
+  if (!Array.isArray(finalVariants) || finalVariants.length === 0) {
     return res.status(400).json({ error: 'At least one variant is required' });
   }
 
-  const normalizedVariants = variants.map(normalizeVariantInput);
+  // Handle Cloudinary uploads for variants with files
+  if (req.files && Array.isArray(req.files)) {
+    for (let i = 0; i < finalVariants.length; i++) {
+        const fieldName = `variant_image_${i}`;
+        const file = (req.files as Express.Multer.File[]).find(f => f.fieldname === fieldName);
+        
+        if (file) {
+          try {
+            const result = await new Promise<UploadApiResponse>((resolve, reject) => {
+              const uploadStream = cloudinary.uploader.upload_stream(
+                { folder: 'products' },
+                (error, result) => {
+                  if (error) reject(error);
+                  else resolve(result!);
+                }
+              );
+              uploadStream.end(file.buffer);
+            });
+            finalVariants[i].image = result.secure_url;
+          } catch (uploadError) {
+            console.error(`Error uploading variant image ${i}:`, uploadError);
+            return res.status(500).json({ error: 'Failed to upload variant image to Cloudinary' });
+          }
+        }
+      }
+  }
+
+  const normalizedVariants = finalVariants.map(normalizeVariantInput);
 
   const hasInvalidVariant = normalizedVariants.some((variant) => !variant.title || !variant.image);
 
