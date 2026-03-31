@@ -283,14 +283,17 @@ export const createProduct = async (req: Request, res: Response) => {
           const result = await new Promise<UploadApiResponse>((resolve, reject) => {
             const uploadStream = cloudinary.uploader.upload_stream(
               { folder: 'products' },
-              (error, result) => {
+              (error: any, result: any) => {
                 if (error) reject(error);
                 else resolve(result!);
               }
             );
             uploadStream.end(file.buffer);
           });
-          finalVariants[i].image = result.secure_url;
+          const variant = finalVariants[i];
+          if (variant) {
+            variant.image = result.secure_url;
+          }
         } catch (uploadError) {
           console.error(`Error uploading variant image ${i}:`, uploadError);
           return res.status(500).json({ error: 'Failed to upload variant image to Cloudinary' });
@@ -404,14 +407,17 @@ export const updateProduct = async (req: Request, res: Response) => {
             const result = await new Promise<UploadApiResponse>((resolve, reject) => {
               const uploadStream = cloudinary.uploader.upload_stream(
                 { folder: 'products' },
-                (error, result) => {
+                (error: any, result: any) => {
                   if (error) reject(error);
                   else resolve(result!);
                 }
               );
               uploadStream.end(file.buffer);
             });
-            finalVariants[i].image = result.secure_url;
+            const variant = finalVariants[i];
+            if (variant) {
+              variant.image = result.secure_url;
+            }
           } catch (uploadError) {
             console.error(`Error uploading variant image ${i}:`, uploadError);
             return res.status(500).json({ error: 'Failed to upload variant image to Cloudinary' });
